@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Auth - FastAPI + OTP</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen flex flex-col items-center justify-center p-4">
+
+    <div class="max-w-md w-full bg-white rounded-xl shadow-lg p-8 space-y-6">
+        <div class="text-center">
+            <h1 class="text-2xl font-bold text-gray-900">Secure Auth System</h1>
+            <p class="text-sm text-gray-500">FastAPI + JWT + OTP Verification</p>
+        </div>
+
+        <!-- Alertas -->
+        <div id="alert" class="hidden p-3 rounded-lg text-sm text-center"></div>
+
+        <!-- VISTA DE REGISTRO -->
+        <div id="view-register" class="space-y-4">
+            <h2 class="text-lg font-semibold text-gray-700">Crear Cuenta</h2>
+            <input type="text" id="reg-name" placeholder="Nombre completo" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <input type="email" id="reg-email" placeholder="Correo electrónico" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <input type="password" id="reg-pass" placeholder="Contraseña (mín. 8 caracteres)" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <input type="password" id="reg-pass-conf" placeholder="Confirmar contraseña" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <button onclick="registerUser()" class="w-full bg-indigo-600 text-white py-2 rounded-lg font-semibold hover:bg-indigo-700 transition">Registrarse</button>
+            <p class="text-sm text-center text-gray-600">¿Ya tienes cuenta? <a href="#" onclick="switchView('login')" class="text-indigo-600 font-medium">Inicia sesión</a></p>
+        </div>
+
+        <!-- VISTA DE VERIFICACIÓN OTP -->
+        <div id="view-otp" class="hidden space-y-4">
+            <h2 class="text-lg font-semibold text-gray-700">Verificar Código OTP</h2>
+            <p class="text-xs text-gray-500">Hemos enviado un código de 6 dígitos a tu correo electrónico (si estás en local, revísalo en la consola de tu terminal).</p>
+            <input type="email" id="otp-email" placeholder="Correo electrónico" class="w-full px-4 py-2 border rounded-lg bg-gray-100" readonly>
+            <input type="text" id="otp-code" placeholder="Código OTP (6 dígitos)" maxlength="6" class="w-full px-4 py-2 border rounded-lg text-center tracking-widest text-lg font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <button onclick="verifyOtp()" class="w-full bg-indigo-600 text-white py-2 rounded-lg font-semibold hover:bg-indigo-700 transition">Verificar OTP</button>
+            <button onclick="resendOtp()" class="w-full bg-gray-200 text-gray-700 py-2 rounded-lg font-medium hover:bg-gray-300 transition text-sm">Reenviar Código</button>
+            <p class="text-sm text-center text-gray-600"><a href="#" onclick="switchView('login')" class="text-indigo-600 font-medium">Ir al Login</a></p>
+        </div>
+
+        <!-- VISTA DE LOGIN -->
+        <div id="view-login" class="hidden space-y-4">
+            <h2 class="text-lg font-semibold text-gray-700">Iniciar Sesión</h2>
+            <input type="email" id="login-email" placeholder="Correo electrónico" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <input type="password" id="login-pass" placeholder="Contraseña" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <button onclick="loginUser()" class="w-full bg-indigo-600 text-white py-2 rounded-lg font-semibold hover:bg-indigo-700 transition">Entrar</button>
+            <p class="text-sm text-center text-gray-600">¿No tienes cuenta? <a href="#" onclick="switchView('register')" class="text-indigo-600 font-medium">Regístrate</a></p>
+        </div>
+
+        <!-- VISTA DE PERFIL (Protegida) -->
+        <div id="view-profile" class="hidden space-y-4">
+            <h2 class="text-lg font-semibold text-gray-700">Mi Perfil</h2>
+            <div class="bg-gray-50 p-4 rounded-lg space-y-2 border">
+                <p><strong>Nombre:</strong> <span id="prof-name"></span></p>
+                <p><strong>Correo:</strong> <span id="prof-email"></span></p>
+                <p><strong>Registrado:</strong> <span id="prof-date"></span></p>
+            </div>
+            <button onclick="logoutUser()" class="w-full bg-red-600 text-white py-2 rounded-lg font-semibold hover:bg-red-700 transition">Cerrar Sesión</button>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = ""; // Relativo al mismo servidor FastAPI
+
+        function showAlert(message, isError = false) {
+            const alertDiv = document.getElementById("alert");
+            alertDiv.textContent = message;
+            alertDiv.className = `p-3 rounded-lg text-sm text-center ${isError ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`;
+            alertDiv.classList.remove("hidden");
+        }
+
+        function switchView(view) {
+            document.getElementById("view-register").classList.add("hidden");
+            document.getElementById("view-otp").classList.add("hidden");
+            document.getElementById("view-login").classList.add("hidden");
+            document.getElementById("view-profile").classList.add("hidden");
+            document.getElementById("alert").classList.add("hidden");
+
+            if (view === 'register') document.getElementById("view-register").classList.remove("hidden");
+            if (view === 'otp') document.getElementById("view-otp").classList.remove("hidden");
+            if (view === 'login') document.getElementById("view-login").classList.remove("hidden");
+            if (view === 'profile') document.getElementById("view-profile").classList.remove("hidden");
+        }
+
+        async function registerUser() {
+            const full_name = document.getElementById("reg-name").value;
+            const email = document.getElementById("reg-email").value;
+            const password = document.getElementById("reg-pass").value;
+            const password_confirmation = document.getElementById("reg-pass-conf").value;
+
+            try {
+                const res = await fetch(`${API_URL}/auth/register`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ full_name, email, password, password_confirmation })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || "Error en el registro");
+
+                showAlert("¡Registro exitoso! Revisa tu código OTP.");
+                document.getElementById("otp-email").value = email;
+                setTimeout(() => switchView('otp'), 1500);
+            } catch (err) {
+                showAlert(err.message, true);
+            }
+        }
+
+        async function verifyOtp() {
+            const email = document.getElementById("otp-email").value;
+            const code = document.getElementById("otp-code").value;
+
+            try {
+                const res = await fetch(`${API_URL}/auth/verify-otp`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email, code })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || "Código OTP inválido");
+
+                showAlert("¡Correo verificado con éxito! Ya puedes iniciar sesión.");
+                document.getElementById("login-email").value = email;
+                setTimeout(() => switchView('login'), 1500);
+            } catch (err) {
+                showAlert(err.message, true);
+            }
+        }
+
+        async function resendOtp() {
+            const email = document.getElementById("otp-email").value;
+            try {
+                const res = await fetch(`${API_URL}/auth/resend-otp`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email })
+                });
+                if (!res.ok) throw new Error("No se pudo reenviar el código");
+                showAlert("Nuevo código OTP enviado exitosamente.");
+            } catch (err) {
+                showAlert(err.message, true);
+            }
+        }
+
+        async function loginUser() {
+            const email = document.getElementById("login-email").value;
+            const password = document.getElementById("login-pass").value;
+
+            try {
+                const res = await fetch(`${API_URL}/auth/login`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || "Credenciales incorrectas");
+
+                localStorage.setItem("access_token", data.access_token);
+                loadProfile();
+            } catch (err) {
+                showAlert(err.message, true);
+            }
+        }
+
+        async function loadProfile() {
+            const token = localStorage.getItem("access_token");
+            if (!token) {
+                switchView('login');
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/users/profile`, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error("Sesión expirada");
+                const user = await res.json();
+
+                document.getElementById("prof-name").textContent = user.full_name;
+                document.getElementById("prof-email").textContent = user.email;
+                document.getElementById("prof-date").textContent = new Date(user.created_at).toLocaleString();
+                switchView('profile');
+            } catch (err) {
+                localStorage.removeItem("access_token");
+                switchView('login');
+            }
+        }
+
+        async function logoutUser() {
+            const token = localStorage.getItem("access_token");
+            try {
+                await fetch(`${API_URL}/auth/logout`, {
+                    method: "POST",
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+            } catch (e) {}
+
+            localStorage.removeItem("access_token");
+            showAlert("Sesión cerrada correctamente.");
+            setTimeout(() => switchView('login'), 1000);
+        }
+
+        // Al cargar la página, comprobar si hay sesión activa
+        window.onload = () => {
+            if (localStorage.getItem("access_token")) {
+                loadProfile();
+            } else {
+                switchView('register');
+            }
+        };
+    </script>
+</body>
+</html>

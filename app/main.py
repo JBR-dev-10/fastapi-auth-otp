@@ -1,4 +1,6 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.database import engine, Base
@@ -18,11 +20,19 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Registro de routers
+# Montar archivos estáticos para el frontend
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+# Registro de routers de API
 app.include_router(auth.router)
 app.include_router(users.router)
 
-@app.get("/", tags=["Health Check"])
-def root():
-    """Endpoint raíz para verificación de estado del servicio."""
+@app.get("/", tags=["Frontend"])
+def serve_frontend():
+    """Sirve la interfaz web de usuario."""
+    return FileResponse("app/static/index.html")
+
+@app.get("/health", tags=["Health Check"])
+def health_check():
+    """Endpoint de verificación de estado del servicio."""
     return {"status": "online", "service": "Secure Auth API"}
